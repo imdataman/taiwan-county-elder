@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="utf-8">
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+    <style>
+        .subunit {
+            fill: none;
+        }
+
+        body {
+            background-color: #f2f5f6;
+        }
+
+        circle {
+            fill: #03a9f4;
+            stroke: white;
+            stroke-width: 2px;
+        }
+
+        .active {
+            stroke: #000;
+        }
+
+        .q0-9 {
+            fill: rgb(247, 251, 255);
+        }
+
+        .q1-9 {
+            fill: rgb(222, 235, 247);
+        }
+
+        .q2-9 {
+            fill: rgb(198, 219, 239);
+        }
+
+        .q3-9 {
+            fill: rgb(158, 202, 225);
+        }
+
+        .q4-9 {
+            fill: rgb(107, 174, 214);
+        }
+
+        .q5-9 {
+            fill: rgb(66, 146, 198);
+        }
+
+        .q6-9 {
+            fill: rgb(33, 113, 181);
+        }
+
+        .q7-9 {
+            fill: rgb(8, 81, 156);
+        }
+
+        .q8-9 {
+            fill: rgb(8, 48, 107);
+        }
+
+        .subunit-boundary {
+            fill: none;
+            stroke: #777;
+            /*stroke-dasharray: 2, 2;*/
+            stroke-linejoin: round;
+        }
+
+        .subunit-label {
+            fill: black;
+            font-size: 20px;
+            font-weight: 300;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        .subunit-label {
+            fill: black;
+            font-size: 20px;
+            font-weight: 300;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        .axis text {
+            font-size: 15px;
+        }
+
+        .axis .tick line {
+            display: none;
+        }
+
+        .axis path {
+            display: none;
+        }
+
+        .dragBar rect {
+            fill: #ff8700;
+            stroke: none;
+            stroke-width: 1px;
+        }
+
+        .legend rect {
+            stroke: black;
+            stroke-width: 0.5px;
+        }
+
+        .legend line {
+            display: none;
+        }
+
+        .legend path {
+            display: none;
+        }
+
+        .legend text {
+            font-size: 15px;
+        }
+
+        .playButton {
+            fill: white;
+            stroke: black;
+            stroke-width: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        var width = 960,
+            height = 700;
+
+        var legendData = d3.range(6.1, 18, 1.33);
+        var legendText = d3.range(6, 18);
+
+        var quantize = d3.scaleQuantize()
+            .domain([6, 18])
+            .range(d3.range(9).map(function(i) {
+                return "q" + i + "-9";
+            }));
+
+        var dragX = d3.scaleQuantize()
+            .domain([0, 510])
+            .range(d3.range(0, 540, 30));
+
+        var xToYear = d3.scaleOrdinal()
+            .domain(d3.range(0, 540, 30))
+            .range(d3.range(1998, 2016));
+
+        var yearToX = d3.scaleOrdinal()
+            .range(d3.range(0, 540, 30))
+            .domain(d3.range(1998, 2016, 1));
+
+        var legendY = d3.scaleLinear()
+            .range([0, 225])
+            .domain([6, 18]);
+
+        var svg = d3.select("body").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        var projection = d3.geoMercator()
+            .center([121, 22])
+            .scale(8000)
+            .translate([width / 2, height / 2 + 250]);
+
+        var path = d3.geoPath()
+            .projection(projection);
+
+        d3.json("test.json", function(error, uk) {
+            if (error) return console.error(error);
+
+            svg.append("g")
+                .selectAll("path")
+                .data(topojson.feature(uk, uk.objects.subunits).features)
+                .enter().append("path")
+                .attr("class", function(d) {
+                    return "subunit " + quantize(d.properties.d_1998_1);
+                })
+                .attr("d", path)
+                .on("mouseover", mouseover)
+                .on("mouseout", mouseout);
+
+            svg.append("path")
+                .datum(topojson.mesh(uk, uk.objects.subunits, function(a, b) {
+                    return a !== b;
+                }))
+                .attr("d", path)
+                .attr("class", "subunit-boundary");
+
+            svg.append("path")
+                .datum(topojson.mesh(uk, uk.objects.subunits, function(a, b) {
+                    return a === b;
+                }))
+                .attr("class", "subunit-boundary")
+                .attr("d", path);
+
+
+            svg.selectAll(".subunit-label")
+                .data(topojson.feature(uk, uk.objects.subunits).features)
+                .enter().append("text")
+                .attr("class", function(d) {
+                    return "subunit-label " + d.properties.C_Name;
+                })
+                .attr("transform", function(d) {
+                    return "translate(" + path.centroid(d) + ")";
+                })
+                .attr("dy", ".35em")
+                .text(function(d) {
+                    return d.properties.C_Name;
+                })
+                .style("opacity", 0);
+
+
+            var dragBar = svg.append("g")
+                .attr("class", "dragBar")
+                .attr("transform", "translate(200,50)");
+
+            dragBar.append("g")
+                .attr("class", "axis axis-top")
+                .call(d3.axisBottom(yearToX).tickValues(d3.range(1998, 2016, 2)));
+
+            dragBar.append("g")
+                .attr("class", "axis axis-down")
+                .attr("transform", "translate(0,-5)")
+                .call(d3.axisTop(yearToX).tickValues(d3.range(1999, 2016, 2)));
+
+            dragBar.append("rect")
+                .attr("x", 0)
+                .attr("y", -6)
+                .attr("width", 510)
+                .attr("height", 5);
+
+            dragBar
+                .append("circle")
+                .attr("cy", -4)
+                .attr("r", 8)
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+
+            var legend = svg.append("g")
+                .attr("class", "legend")
+                .attr("transform", "translate(" + (width - 300) + "," + (height  - 350) + ")")
+
+            legend.selectAll("rect")
+                .data(legendData)
+                .enter()
+                .append("rect")
+                .attr("class", function(d) {
+                    return quantize(d);
+                })
+                .attr("x", 0)
+                .attr("y", function(d, i) {
+                    return i * 25;
+                })
+                .attr("width", 25)
+                .attr("height", 25);
+
+            legend.append("g")
+                .attr("transform", "translate(25, 0)")
+                .call(d3.axisRight(legendY)
+                    .tickValues(d3.range(6, 19, 4))
+                    .tickFormat(function(d) {
+                        return d + "%";
+                    }));
+
+            var playButton = svg.append("g")
+                .attr("transform", "translate(150, 50)");
+
+            playButton.append("circle")
+                .attr("class", "playButton")
+                .attr("r", 25)
+                .attr("cx", 0)
+                .attr("cy", 0)
+                .classed("play", false)
+                .on("click", click);
+
+            playButton.append('polygon')
+                .attr("class", "triangle")
+                .attr('points', '-7,10 -7,-10 15,0')
+                .style("pointer-events", "none");
+
+            playButton.append('rect')
+                .attr("class", "stop")
+                .attr("x", -12)
+                .attr("y", 4)
+                .attr("width", 25)
+                .attr("height", 7)
+                .style("pointer-events", "none")
+                .style("opacity", 0);
+
+            playButton.append('rect')
+                .attr("class", "stop")
+                .attr("x", -12)
+                .attr("y", -10)
+                .attr("width", 25)
+                .attr("height", 7)
+                .style("pointer-events", "none")
+                .style("opacity", 0);
+
+
+            function dragstarted(d) {
+                d3.select(this).classed("active", true);
+            }
+
+            function dragged(d) {
+                d3.select(this).attr("cx", function() {
+                    if (d3.event.x > 510) {
+                        return 510;
+                    } else if (d3.event.x < 0) {
+                        return 0;
+                    } else {
+                        return dragX(d3.event.x);
+                    }
+                });
+
+                var year = xToYear(d3.select(this).attr("cx"));
+                var yearProperty = "d_" + year + "_1";
+
+                svg.selectAll(".subunit")
+                    .attr("class", function(d) {
+                        return "subunit " + quantize(d["properties"][yearProperty]);
+                    })
+            }
+
+            function dragended(d) {
+                d3.select(this).classed("active", false);
+            }
+
+            function mouseover(d) {
+                var target = "." + d.properties.C_Name;
+                d3.select(target).style("opacity", 1);
+            }
+
+            function mouseout(d) {
+                var target = "." + d.properties.C_Name;
+                d3.select(target).style("opacity", 0);
+            }
+
+            function click() {
+                if (!d3.select(".playButton").classed("play")) {
+                    d3.select(".playButton").classed("play", true);
+                    d3.select(".triangle").style("opacity", 0);
+                    d3.selectAll(".stop").style("opacity", 1);
+                    var circle = d3.select(".dragBar circle");
+                    var x = +circle.attr("cx");
+                    x = x >= 510 ? 0 : x;
+                    circle.attr("cx", x);
+
+                    window.t = d3.interval(function() {
+                        x = x + 30;
+                        if (x > 510) {
+                            d3.select(".triangle").style("opacity", 1);
+                            d3.selectAll(".stop").style("opacity", 0);
+                            d3.select(".playButton").classed("play", false);
+                            t.stop();
+                            return;
+                        }
+                        circle.attr("cx", x);
+                        var year = xToYear(circle.attr("cx"));
+                        var yearProperty = "d_" + year + "_1";
+
+                        svg.selectAll(".subunit")
+                            .attr("class", function(d) {
+                                return "subunit " + quantize(d["properties"][yearProperty]);
+                            });
+                    }, 300);
+                } else {
+                    d3.select(".triangle").style("opacity", 1);
+                    d3.selectAll(".stop").style("opacity", 0);
+                    d3.select(".playButton").classed("play", false);
+                    t.stop();
+                }
+            }
+        });
+    </script>
+</body>
